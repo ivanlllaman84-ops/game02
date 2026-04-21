@@ -168,7 +168,11 @@
             ];
             const colors = ['#ff6b6b','#4ecdc4','#ffe66d','#95e1d3','#f38181','#aa96da','#fcbad3'];
 
-            let piece = { shape: shapes[Math.floor(Math.random()*shapes.length)][0], color: colors[Math.floor(Math.random()*colors.length)], x: 3, y: 0 };
+            let piece = {
+                shape: shapes[Math.floor(Math.random()*shapes.length)].map(r => [...r]),
+                color: colors[Math.floor(Math.random()*colors.length)],
+                x: 3, y: 0
+            };
 
             function draw() {
                 ctx.fillStyle = '#000';
@@ -180,35 +184,49 @@
                             ctx.fillRect(c*size, r*size, size-1, size-1);
                         }
                 ctx.fillStyle = piece.color;
-                piece.shape.forEach((row, ry) => {
-                    row.toString().split('').forEach((val, rx) => {
-                        if(val==='1') ctx.fillRect((piece.x+rx)*size, (piece.y+ry)*size, size-1, size-1);
-                    });
-                });
-            }
-
-            function rotate(p) {
-                return p[0].map((_,i) => p.map(r => r[i]).reverse());
-            }
-
-            function collide() {
-                for(let ry=0; ry<piece.shape.length; ry++)
-                    for(let rx=0; rx<piece.shape[ry].length; rx++)
+                for(let ry=0; ry<piece.shape.length; ry++) {
+                    for(let rx=0; rx<piece.shape[ry].length; rx++) {
                         if(piece.shape[ry][rx]) {
-                            let nx = piece.x + rx, ny = piece.y + ry;
-                            if(nx<0 || nx>=cols || ny>=rows || board[ny][nx]) return true;
+                            ctx.fillRect((piece.x+rx)*size, (piece.y+ry)*size, size-1, size-1);
                         }
+                    }
+                }
+            }
+
+            function rotate(shape) {
+                const newShape = [];
+                for(let x=0; x<shape[0].length; x++) {
+                    newShape[x] = [];
+                    for(let y=shape.length-1; y>=0; y--) {
+                        newShape[x].push(shape[y][x]);
+                    }
+                }
+                return newShape;
+            }
+
+            function collide(offX, offY, shape) {
+                for(let ry=0; ry<shape.length; ry++) {
+                    for(let rx=0; rx<shape[ry].length; rx++) {
+                        if(shape[ry][rx]) {
+                            let nx = piece.x + offX + rx, ny = piece.y + offY + ry;
+                            if(nx < 0 || nx >= cols || ny >= rows) return true;
+                            if(ny >= 0 && board[ny][nx]) return true;
+                        }
+                    }
+                }
                 return false;
             }
 
             function merge() {
-                piece.shape.forEach((row, ry) => {
-                    row.toString().split('').forEach((val, rx) => {
-                        if(val==='1') board[piece.y+ry][piece.x+rx] = piece.color;
-                    });
-                });
+                for(let ry=0; ry<piece.shape.length; ry++) {
+                    for(let rx=0; rx<piece.shape[ry].length; rx++) {
+                        if(piece.shape[ry][rx] && piece.y + ry >= 0) {
+                            board[piece.y + ry][piece.x + rx] = piece.color;
+                        }
+                    }
+                }
                 for(let r=rows-1; r>=0; r--) {
-                    if(board[r].every(c=>c)) {
+                    if(board[r].every(c => c)) {
                         board.splice(r, 1);
                         board.unshift(Array(cols).fill(0));
                         score += 10;
@@ -216,10 +234,10 @@
                         r++;
                     }
                 }
-                piece.shape = shapes[Math.floor(Math.random()*shapes.length)][0];
+                piece.shape = shapes[Math.floor(Math.random()*shapes.length)].map(r => [...r]);
                 piece.color = colors[Math.floor(Math.random()*colors.length)];
                 piece.x = 3; piece.y = 0;
-                if(collide()) {
+                if(collide(0, 0, piece.shape)) {
                     board = Array(rows).fill(null).map(() => Array(cols).fill(0));
                     score = 0;
                     document.getElementById('tetrisScore').textContent = score;
@@ -227,26 +245,32 @@
             }
 
             function move(dir) {
-                piece.x += dir;
-                if(collide()) piece.x -= dir;
+                if(!collide(dir, 0, piece.shape)) piece.x += dir;
             }
 
             function drop() {
-                piece.y++;
-                if(collide()) {
-                    piece.y--;
-                    merge();
+                if(!collide(0, 1, piece.shape)) {
+                    piece.y++;
+                    return true;
                 }
+                return false;
             }
 
             document.onkeydown = e => {
                 if(e.key==='ArrowLeft') move(-1);
                 if(e.key==='ArrowRight') move(1);
-                if(e.key==='ArrowDown') drop();
+                if(e.key==='ArrowDown') { drop(); draw(); }
                 if(e.key==='ArrowUp') {
-                    let old = piece.shape;
-                    piece.shape = rotate(piece.shape);
-                    if(collide()) piece.shape = old;
+                    let rotated = rotate(piece.shape);
+                    if(!collide(0, 0, rotated)) {
+                        piece.shape = rotated;
+                    } else if(!collide(-1, 0, rotated)) {
+                        piece.x -= 1;
+                        piece.shape = rotated;
+                    } else if(!collide(1, 0, rotated)) {
+                        piece.x += 1;
+                        piece.shape = rotated;
+                    }
                 }
             };
 
@@ -258,7 +282,7 @@
         function startArkanoid() {
             const canvas = document.getElementById('arkanoidCanvas');
             const ctx = canvas.getContext('2d');
-            let x = canvas.width/2, y = canvas.height-30, dx = 3, dy = -3;
+            let x = canvas.width/2, y = canvas.height-30, dx = 2, dy = -2;
             let paddleWidth = 75, paddleX = (canvas.width-paddleWidth)/2;
             let rightPressed = false, leftPressed = false;
             let score = 0;
@@ -292,7 +316,7 @@
                     dx = (x - (paddleX+paddleWidth/2)) * 0.1;
                 }
                 if(y+8>canvas.height) {
-                    x = canvas.width/2; y = canvas.height-30; dx = 3; dy = -3;
+                    x = canvas.width/2; y = canvas.height-30; dx = 2; dy = -2;
                     score = 0;
                     document.getElementById('arkanoidScore').textContent = score;
                     bricks.forEach(c => c.forEach(r => r.status = 1));
@@ -301,8 +325,11 @@
                     for(let r=0; r<4; r++)
                         if(bricks[c][r].status) {
                             let b = bricks[c][r];
-                            if(x>b.x && x<b.x+70 && y>b.y && y<b.y+15) {
-                                dy = -dy; b.status = 0; score++;
+                            let bx = b.x, by = b.y, bw = 70, bh = 15;
+                            if(x+8 > bx && x-8 < bx+bw && y+8 > by && y-8 < by+bh) {
+                                if(y < by || y > by+bh) dy = -dy;
+                                else dx = -dx;
+                                b.status = 0; score++;
                                 document.getElementById('arkanoidScore').textContent = score;
                             }
                         }
@@ -376,7 +403,7 @@
             };
 
             if(snakeInterval) clearInterval(snakeInterval);
-            snakeInterval = setInterval(update, 100);
+            snakeInterval = setInterval(update, 150);
             draw();
         }
     </script>
