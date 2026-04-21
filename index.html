@@ -1,1 +1,386 @@
-Hiya there, pal! This is my site.
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Игровой портал</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        h1 {
+            color: #fff;
+            font-size: 3rem;
+            margin-bottom: 50px;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        .games-container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .game-btn {
+            width: 200px;
+            height: 200px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        .game-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+        }
+        .tetris {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        }
+        .arkanoid {
+            background: linear-gradient(45deg, #4ecdc4, #44a3aa);
+        }
+        .snake {
+            background: linear-gradient(45deg, #a8e6cf, #56ab91);
+        }
+        .game-area {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .game-area.active {
+            display: flex;
+        }
+        .game-title {
+            color: white;
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+        canvas {
+            border: 3px solid #fff;
+            background: #000;
+        }
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            background: #ff6b6b;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .score {
+            color: white;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+        #snakeCanvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Игровой портал</h1>
+    <div class="games-container">
+        <button class="game-btn tetris" onclick="openGame('tetris')">Тетрис</button>
+        <button class="game-btn arkanoid" onclick="openGame('arkanoid')">Арканоид</button>
+        <button class="game-btn snake" onclick="openGame('snake')">Змейка</button>
+    </div>
+
+    <div id="tetrisGame" class="game-area">
+        <button class="close-btn" onclick="closeGame('tetris')">×</button>
+        <div class="game-title">Тетрис</div>
+        <div class="score">Счёт: <span id="tetrisScore">0</span></div>
+        <canvas id="tetrisCanvas" width="300" height="600"></canvas>
+    </div>
+
+    <div id="arkanoidGame" class="game-area">
+        <button class="close-btn" onclick="closeGame('arkanoid')">×</button>
+        <div class="game-title">Арканоид</div>
+        <div class="score">Счёт: <span id="arkanoidScore">0</span></div>
+        <canvas id="arkanoidCanvas" width="480" height="320"></canvas>
+    </div>
+
+    <div id="snakeGame" class="game-area">
+        <button class="close-btn" onclick="closeGame('snake')">×</button>
+        <div class="game-title">Змейка</div>
+        <div class="score">Счёт: <span id="snakeScore">0</span></div>
+        <canvas id="snakeCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <script>
+        function openGame(game) {
+            document.getElementById(game + 'Game').classList.add('active');
+            if (game === 'tetris') startTetris();
+            if (game === 'arkanoid') startArkanoid();
+            if (game === 'snake') startSnake();
+        }
+
+        function closeGame(game) {
+            document.getElementById(game + 'Game').classList.remove('active');
+        }
+
+        let tetrisInterval, arkanoidInterval, snakeInterval;
+
+        function startTetris() {
+            const canvas = document.getElementById('tetrisCanvas');
+            const ctx = canvas.getContext('2d');
+            const cols = 10, rows = 20, size = 30;
+            let board = Array(rows).fill(null).map(() => Array(cols).fill(0));
+            let score = 0;
+
+            const shapes = [
+                [[1,1,1,1]],
+                [[1,1],[1,1]],
+                [[1,1,1],[0,1,0]],
+                [[1,1,1],[1,0,0]],
+                [[1,1,1],[0,0,1]],
+                [[1,1,0],[0,1,1]],
+                [[0,1,1],[1,1,0]]
+            ];
+            const colors = ['#ff6b6b','#4ecdc4','#ffe66d','#95e1d3','#f38181','#aa96da','#fcbad3'];
+
+            let piece = { shape: shapes[Math.floor(Math.random()*shapes.length)][0], color: colors[Math.floor(Math.random()*colors.length)], x: 3, y: 0 };
+
+            function draw() {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                for(let r=0; r<rows; r++)
+                    for(let c=0; c<cols; c++)
+                        if(board[r][c]) {
+                            ctx.fillStyle = board[r][c];
+                            ctx.fillRect(c*size, r*size, size-1, size-1);
+                        }
+                ctx.fillStyle = piece.color;
+                piece.shape.forEach((row, ry) => {
+                    row.toString().split('').forEach((val, rx) => {
+                        if(val==='1') ctx.fillRect((piece.x+rx)*size, (piece.y+ry)*size, size-1, size-1);
+                    });
+                });
+            }
+
+            function rotate(p) {
+                return p[0].map((_,i) => p.map(r => r[i]).reverse());
+            }
+
+            function collide() {
+                for(let ry=0; ry<piece.shape.length; ry++)
+                    for(let rx=0; rx<piece.shape[ry].length; rx++)
+                        if(piece.shape[ry][rx]) {
+                            let nx = piece.x + rx, ny = piece.y + ry;
+                            if(nx<0 || nx>=cols || ny>=rows || board[ny][nx]) return true;
+                        }
+                return false;
+            }
+
+            function merge() {
+                piece.shape.forEach((row, ry) => {
+                    row.toString().split('').forEach((val, rx) => {
+                        if(val==='1') board[piece.y+ry][piece.x+rx] = piece.color;
+                    });
+                });
+                for(let r=rows-1; r>=0; r--) {
+                    if(board[r].every(c=>c)) {
+                        board.splice(r, 1);
+                        board.unshift(Array(cols).fill(0));
+                        score += 10;
+                        document.getElementById('tetrisScore').textContent = score;
+                        r++;
+                    }
+                }
+                piece.shape = shapes[Math.floor(Math.random()*shapes.length)][0];
+                piece.color = colors[Math.floor(Math.random()*colors.length)];
+                piece.x = 3; piece.y = 0;
+                if(collide()) {
+                    board = Array(rows).fill(null).map(() => Array(cols).fill(0));
+                    score = 0;
+                    document.getElementById('tetrisScore').textContent = score;
+                }
+            }
+
+            function move(dir) {
+                piece.x += dir;
+                if(collide()) piece.x -= dir;
+            }
+
+            function drop() {
+                piece.y++;
+                if(collide()) {
+                    piece.y--;
+                    merge();
+                }
+            }
+
+            document.onkeydown = e => {
+                if(e.key==='ArrowLeft') move(-1);
+                if(e.key==='ArrowRight') move(1);
+                if(e.key==='ArrowDown') drop();
+                if(e.key==='ArrowUp') {
+                    let old = piece.shape;
+                    piece.shape = rotate(piece.shape);
+                    if(collide()) piece.shape = old;
+                }
+            };
+
+            if(tetrisInterval) clearInterval(tetrisInterval);
+            tetrisInterval = setInterval(() => { drop(); draw(); }, 300);
+            draw();
+        }
+
+        function startArkanoid() {
+            const canvas = document.getElementById('arkanoidCanvas');
+            const ctx = canvas.getContext('2d');
+            let x = canvas.width/2, y = canvas.height-30, dx = 3, dy = -3;
+            let paddleWidth = 75, paddleX = (canvas.width-paddleWidth)/2;
+            let rightPressed = false, leftPressed = false;
+            let score = 0;
+            let bricks = [];
+            for(let c=0; c<5; c++) {
+                bricks[c] = [];
+                for(let r=0; r<4; r++) bricks[c][r] = {x:0, y:0, status: 1};
+            }
+
+            function draw() {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                for(let c=0; c<5; c++)
+                    for(let r=0; r<4; r++)
+                        if(bricks[c][r].status) {
+                            let bx = c*80+30, by = r*20+30;
+                            bricks[c][r].x = bx; bricks[c][r].y = by;
+                            ctx.fillStyle = '#4ecdc4';
+                            ctx.fillRect(bx, by, 70, 15);
+                        }
+                ctx.fillStyle = '#ff6b6b';
+                ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#ffe66d';
+                ctx.fillRect(paddleX, canvas.height-10, paddleWidth, 10);
+
+                x += dx; y += dy;
+                if(x+8>canvas.width || x-8<0) dx = -dx;
+                if(y-8<0) dy = -dy;
+                if(y+8>canvas.height-10 && x>paddleX && x<paddleX+paddleWidth) {
+                    dy = -dy;
+                    dx = (x - (paddleX+paddleWidth/2)) * 0.1;
+                }
+                if(y+8>canvas.height) {
+                    x = canvas.width/2; y = canvas.height-30; dx = 3; dy = -3;
+                    score = 0;
+                    document.getElementById('arkanoidScore').textContent = score;
+                    bricks.forEach(c => c.forEach(r => r.status = 1));
+                }
+                for(let c=0; c<5; c++)
+                    for(let r=0; r<4; r++)
+                        if(bricks[c][r].status) {
+                            let b = bricks[c][r];
+                            if(x>b.x && x<b.x+70 && y>b.y && y<b.y+15) {
+                                dy = -dy; b.status = 0; score++;
+                                document.getElementById('arkanoidScore').textContent = score;
+                            }
+                        }
+            }
+
+            document.onkeydown = e => { if(e.key==='Right' || e.key==='ArrowRight') rightPressed = true; if(e.key==='Left' || e.key==='ArrowLeft') leftPressed = true; };
+            document.onkeyup = e => { if(e.key==='Right' || e.key==='ArrowRight') rightPressed = false; if(e.key==='Left' || e.key==='ArrowLeft') leftPressed = false; };
+
+            function update() {
+                if(rightPressed && paddleX < canvas.width-paddleWidth) paddleX += 7;
+                if(leftPressed && paddleX > 0) paddleX -= 7;
+                draw();
+            }
+
+            if(arkanoidInterval) clearInterval(arkanoidInterval);
+            arkanoidInterval = setInterval(update, 20);
+        }
+
+        function startSnake() {
+            const canvas = document.getElementById('snakeCanvas');
+            const ctx = canvas.getContext('2d');
+            let size = 20;
+            let snake = [{x: 200, y: 200}, {x: 180, y: 200}, {x: 160, y: 200}];
+            let food = {x: 0, y: 0};
+            let dx = size, dy = 0;
+            let score = 0;
+            let gameOver = false;
+
+            function randomFood() {
+                food.x = Math.floor(Math.random()*(canvas.width/size))*size;
+                food.y = Math.floor(Math.random()*(canvas.height/size))*size;
+            }
+            randomFood();
+
+            function draw() {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#a8e6cf';
+                snake.forEach(p => ctx.fillRect(p.x, p.y, size-2, size-2));
+                ctx.fillStyle = '#ff6b6b';
+                ctx.fillRect(food.x, food.y, size-2, size-2);
+            }
+
+            function update() {
+                if(gameOver) return;
+                let head = {x: snake[0].x + dx, y: snake[0].y + dy};
+                if(head.x < 0 || head.x >= canvas.width || head.y < 0 || head.y >= canvas.height || snake.some(p => p.x===head.x && p.y===head.y)) {
+                    snake = [{x: 200, y: 200}, {x: 180, y: 200}, {x: 160, y: 200}];
+                    dx = size; dy = 0;
+                    score = 0;
+                    document.getElementById('snakeScore').textContent = score;
+                    randomFood();
+                    return;
+                }
+                snake.unshift(head);
+                if(head.x === food.x && head.y === food.y) {
+                    score++;
+                    document.getElementById('snakeScore').textContent = score;
+                    randomFood();
+                } else {
+                    snake.pop();
+                }
+                draw();
+            }
+
+            document.onkeydown = e => {
+                if(e.key==='ArrowLeft' && dx!==size) { dx = -size; dy = 0; }
+                if(e.key==='ArrowRight' && dx!==-size) { dx = size; dy = 0; }
+                if(e.key==='ArrowUp' && dy!==size) { dx = 0; dy = -size; }
+                if(e.key==='ArrowDown' && dy!==-size) { dx = 0; dy = size; }
+            };
+
+            if(snakeInterval) clearInterval(snakeInterval);
+            snakeInterval = setInterval(update, 100);
+            draw();
+        }
+    </script>
+</body>
+</html>
